@@ -19,11 +19,19 @@ PriceComparison.init({
         type: sequelize_1.DataTypes.DECIMAL(10, 2),
         allowNull: false,
     },
+    userId: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false,
+    },
+    platformId: {
+        type: sequelize_1.DataTypes.INTEGER,
+        allowNull: false,
+    },
 }, {
     sequelize: db_1.sequelize,
     tableName: 'price_comparisons',
+    timestamps: true,
 });
-// Associations
 PriceComparison.belongsTo(user_model_1.default, { foreignKey: 'userId' });
 user_model_1.default.hasMany(PriceComparison, { foreignKey: 'userId' });
 PriceComparison.belongsTo(platform_model_1.default, { foreignKey: 'platformId' });

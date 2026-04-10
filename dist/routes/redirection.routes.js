@@ -36,10 +36,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const redirectionController = __importStar(require("../controllers/redirection.controller"));
 const router = (0, express_1.Router)();
-router.route('/')
+router
+    .route('/')
     .post(redirectionController.createRedirection)
     .get(redirectionController.getRedirections);
-router.route('/:id')
+router
+    .route('/:id')
     .get(redirectionController.getRedirectionById)
     .put(redirectionController.updateRedirection)
     .delete(redirectionController.deleteRedirection);

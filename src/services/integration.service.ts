@@ -3,7 +3,10 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
+const rawFastApiBaseUrl = process.env.FASTAPI_BASE_URL || 'http://localhost:8001';
+const FASTAPI_BASE_URL = rawFastApiBaseUrl.startsWith('http')
+  ? rawFastApiBaseUrl
+  : `http://${rawFastApiBaseUrl}`;
 
 export class IntegrationService {
   async comparePrices(productName: string): Promise<any> {

@@ -17,18 +17,18 @@ const redirection_model_1 = __importDefault(require("../models/redirection.model
 const product_model_1 = __importDefault(require("../models/product.model"));
 const priceComparison_model_1 = __importDefault(require("../models/priceComparison.model"));
 const createRedirection = (redirectionData) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield redirection_model_1.default.create(redirectionData);
+    return redirection_model_1.default.create(redirectionData);
 });
 exports.createRedirection = createRedirection;
 const getRedirections = () => __awaiter(void 0, void 0, void 0, function* () {
-    return yield redirection_model_1.default.findAll({
-        include: [product_model_1.default, priceComparison_model_1.default]
+    return redirection_model_1.default.findAll({
+        include: [product_model_1.default, priceComparison_model_1.default],
     });
 });
 exports.getRedirections = getRedirections;
 const getRedirectionById = (id) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield redirection_model_1.default.findByPk(id, {
-        include: [product_model_1.default, priceComparison_model_1.default]
+    return redirection_model_1.default.findByPk(id, {
+        include: [product_model_1.default, priceComparison_model_1.default],
     });
 });
 exports.getRedirectionById = getRedirectionById;
@@ -37,13 +37,15 @@ const updateRedirection = (id, redirectionData) => __awaiter(void 0, void 0, voi
         where: { id },
     });
     if (affectedCount > 0) {
-        return yield redirection_model_1.default.findByPk(id, { include: [product_model_1.default, priceComparison_model_1.default] });
+        return redirection_model_1.default.findByPk(id, {
+            include: [product_model_1.default, priceComparison_model_1.default],
+        });
     }
     return null;
 });
 exports.updateRedirection = updateRedirection;
 const deleteRedirection = (id) => __awaiter(void 0, void 0, void 0, function* () {
-    return yield redirection_model_1.default.destroy({
+    return redirection_model_1.default.destroy({
         where: { id },
     });
 });

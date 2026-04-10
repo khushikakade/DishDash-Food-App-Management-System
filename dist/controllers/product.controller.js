@@ -12,15 +12,59 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.compareProductByName = exports.compareByRestaurant = exports.compareSearch = exports.addPlatformListing = exports.getProductById = exports.getProducts = exports.createProduct = void 0;
+exports.compareByRestaurant = exports.compareSearch = exports.addPlatformListing = exports.getProductById = exports.getProducts = exports.createProduct = void 0;
 const sequelize_1 = require("sequelize");
 const product_model_1 = __importDefault(require("../models/product.model"));
 const platform_model_1 = __importDefault(require("../models/platform.model"));
 const platformListing_model_1 = __importDefault(require("../models/platformListing.model"));
 const restaurant_model_1 = require("../models/restaurant.model");
-/* =========================
-   CREATE PRODUCT
-========================= */
+const integration_service_1 = require("../services/integration.service");
+const integrationService = new integration_service_1.IntegrationService();
+const normalizeIntegrationResults = (productName, integrationResponse) => {
+    const comparisons = ((integrationResponse === null || integrationResponse === void 0 ? void 0 : integrationResponse.results) || [])
+        .map((result) => {
+        const numericPrice = typeof result.price === 'string'
+            ? Number.parseFloat(result.price.replace(/[^\d.]/g, ''))
+            : Number(result.price);
+        if (!Number.isFinite(numericPrice)) {
+            return null;
+        }
+        return {
+            platform: result.platform || 'Unknown Platform',
+            basePrice: numericPrice,
+            deliveryFee: 0,
+            discount: 0,
+            finalPrice: numericPrice,
+            etaMinutes: Number(result.etaMinutes) || 0,
+            redirectUrl: result.redirectUrl || '#',
+            source: 'integration-service',
+            productName,
+            productImage: null,
+            restaurantName: 'Unknown restaurant',
+            restaurantCuisine: 'Unknown',
+        };
+    })
+        .filter((comparison) => comparison !== null);
+    const cheapest = comparisons.length > 0
+        ? comparisons.reduce((min, current) => current.finalPrice < min.finalPrice ? current : min)
+        : null;
+    const fastestDelivery = comparisons.length > 0
+        ? comparisons.reduce((fastest, current) => current.etaMinutes < fastest.etaMinutes ? current : fastest)
+        : null;
+    return {
+        product: (integrationResponse === null || integrationResponse === void 0 ? void 0 : integrationResponse.product) || productName,
+        restaurant: {
+            id: null,
+            name: 'Unknown restaurant',
+            cuisine: 'Unknown',
+            address: 'Unknown',
+        },
+        comparisons,
+        cheapest,
+        fastestDelivery,
+        source: 'integration-service',
+    };
+};
 const createProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { name, category, restaurantId, imageUrl } = req.body;
@@ -38,9 +82,6 @@ const createProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 });
 exports.createProduct = createProduct;
-/* =========================
-   GET ALL PRODUCTS
-========================= */
 const getProducts = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const products = yield product_model_1.default.findAll();
@@ -51,25 +92,19 @@ const getProducts = (_req, res) => __awaiter(void 0, void 0, void 0, function* (
     }
 });
 exports.getProducts = getProducts;
-/* =========================
-   GET PRODUCT BY ID
-========================= */
 const getProductById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const product = yield product_model_1.default.findByPk(req.params.id);
         if (!product) {
             return res.status(404).json({ message: 'Product not found' });
         }
-        res.json(product);
+        return res.json(product);
     }
     catch (error) {
-        res.status(500).json({ message: 'Error fetching product' });
+        return res.status(500).json({ message: 'Error fetching product' });
     }
 });
 exports.getProductById = getProductById;
-/* =========================
-   ADD PLATFORM LISTING
-========================= */
 const addPlatformListing = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { productId, platformId, price, deliveryFee, discountType, discountValue, etaMinutes, redirectUrl, } = req.body;
@@ -83,25 +118,21 @@ const addPlatformListing = (req, res) => __awaiter(void 0, void 0, void 0, funct
             etaMinutes,
             redirectUrl,
         });
-        res.status(201).json(listing);
+        return res.status(201).json(listing);
     }
     catch (error) {
         console.error(error);
-        res.status(500).json({ message: 'Error adding listing' });
+        return res.status(500).json({ message: 'Error adding listing' });
     }
 });
 exports.addPlatformListing = addPlatformListing;
-/* =========================
-   SEARCH + COMPARE (Enhanced with Restaurant info)
-========================= */
 const compareSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a, _b, _c;
     try {
-        const { product } = req.query;
+        const product = `${req.query.product || ''}`.trim();
         if (!product) {
             return res.status(400).json({ message: 'Product query required' });
         }
-        // ✅ Correct column name is "name"
         const foundProduct = yield product_model_1.default.findOne({
             where: {
                 name: {
@@ -116,14 +147,24 @@ const compareSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             ],
         });
         if (!foundProduct) {
-            return res.status(404).json({ message: 'Product not found' });
+            const integrationResponse = yield integrationService.comparePrices(product);
+            const normalizedResponse = normalizeIntegrationResults(product, integrationResponse);
+            if (!normalizedResponse.comparisons.length) {
+                return res.status(404).json({ message: 'Product not found' });
+            }
+            return res.json(normalizedResponse);
         }
         const listings = yield platformListing_model_1.default.findAll({
             where: { productId: foundProduct.id },
             include: [{ model: platform_model_1.default }],
         });
         if (!listings.length) {
-            return res.status(404).json({ message: 'No listings found' });
+            const integrationResponse = yield integrationService.comparePrices(foundProduct.name);
+            const normalizedResponse = normalizeIntegrationResults(foundProduct.name, integrationResponse);
+            if (!normalizedResponse.comparisons.length) {
+                return res.status(404).json({ message: 'No listings found' });
+            }
+            return res.json(normalizedResponse);
         }
         const comparisons = listings.map((listing) => {
             var _a, _b;
@@ -153,11 +194,12 @@ const compareSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
                 redirectUrl: listing.redirectUrl,
                 discountType: listing.discountType,
                 rating: listing.rating || 0,
+                source: 'database',
             };
         });
         const cheapest = comparisons.reduce((min, curr) => curr.finalPrice < min.finalPrice ? curr : min);
         const fastestDelivery = comparisons.reduce((fastest, curr) => curr.etaMinutes < fastest.etaMinutes ? curr : fastest);
-        res.json({
+        return res.json({
             product: foundProduct.name,
             restaurant: {
                 id: foundProduct.restaurantId,
@@ -168,6 +210,7 @@ const compareSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             comparisons,
             cheapest,
             fastestDelivery,
+            source: 'database',
         });
     }
     catch (error) {
@@ -176,17 +219,13 @@ const compareSearch = (req, res) => __awaiter(void 0, void 0, void 0, function* 
             message: error === null || error === void 0 ? void 0 : error.message,
             stack: error === null || error === void 0 ? void 0 : error.stack,
         });
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Error comparing prices',
-            error: error === null || error === void 0 ? void 0 : error.message
+            error: error === null || error === void 0 ? void 0 : error.message,
         });
     }
 });
 exports.compareSearch = compareSearch;
-/* =========================
-   COMPARE BY RESTAURANT
-   Returns prices organized by restaurant
-========================= */
 const compareByRestaurant = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { restaurantId } = req.params;
@@ -197,7 +236,6 @@ const compareByRestaurant = (req, res) => __awaiter(void 0, void 0, void 0, func
         if (!restaurant) {
             return res.status(404).json({ message: 'Restaurant not found' });
         }
-        // Get all products from this restaurant
         const products = yield product_model_1.default.findAll({
             where: { restaurantId },
         });
@@ -241,9 +279,8 @@ const compareByRestaurant = (req, res) => __awaiter(void 0, void 0, void 0, func
                 allComparisons.push(...comparisons);
             }
         }
-        // Sort by final price for easier comparison
         const sortedByPrice = [...allComparisons].sort((a, b) => a.finalPrice - b.finalPrice);
-        res.json({
+        return res.json({
             restaurant: {
                 id: restaurant.id,
                 name: restaurant.name,
@@ -257,81 +294,10 @@ const compareByRestaurant = (req, res) => __awaiter(void 0, void 0, void 0, func
     }
     catch (error) {
         console.error('Restaurant comparison error:', error);
-        res.status(500).json({
+        return res.status(500).json({
             message: 'Error comparing restaurant prices',
             error: error === null || error === void 0 ? void 0 : error.message,
         });
     }
 });
 exports.compareByRestaurant = compareByRestaurant;
-/* =========================
-   COMPARE PRODUCT BY NAME (SEARCH)
-========================= */
-const compareProductByName = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { product } = req.query;
-        if (!product || typeof product !== 'string') {
-            return res.status(400).json({ message: 'Product name is required' });
-        }
-        // ✅ Correct column name is "name"
-        const foundProduct = yield product_model_1.default.findOne({
-            where: {
-                name: {
-                    [sequelize_1.Op.like]: `%${product}%`,
-                },
-            },
-        });
-        if (!foundProduct) {
-            return res.status(404).json({ message: 'Product not found' });
-        }
-        const listings = yield platformListing_model_1.default.findAll({
-            where: { productId: foundProduct.id },
-            include: [{ model: platform_model_1.default }],
-        });
-        if (!listings.length) {
-            return res.status(404).json({ message: 'No listings found' });
-        }
-        const comparisons = listings.map((listing) => {
-            const basePrice = parseFloat(listing.price);
-            const deliveryFee = parseFloat(listing.deliveryFee || 0);
-            const discountValue = parseFloat(listing.discountValue || 0);
-            let discount = 0;
-            if (listing.discountType === 'percentage') {
-                discount = (basePrice * discountValue) / 100;
-            }
-            else if (listing.discountType === 'flat') {
-                discount = discountValue;
-            }
-            const finalPrice = basePrice + deliveryFee - discount;
-            return {
-                productName: foundProduct.name,
-                productImage: foundProduct.imageUrl,
-                platform: listing.Platform.name,
-                basePrice,
-                deliveryFee,
-                discount,
-                finalPrice,
-                etaMinutes: listing.etaMinutes,
-                redirectUrl: listing.redirectUrl,
-            };
-        });
-        const cheapest = comparisons.reduce((min, curr) => curr.finalPrice < min.finalPrice ? curr : min);
-        res.json({
-            product: foundProduct.name,
-            comparisons,
-            cheapest,
-        });
-    }
-    catch (error) {
-        console.error('Comparison error:', error);
-        console.error('Error details:', {
-            message: error === null || error === void 0 ? void 0 : error.message,
-            stack: error === null || error === void 0 ? void 0 : error.stack,
-        });
-        res.status(500).json({
-            message: 'Error comparing prices',
-            error: error === null || error === void 0 ? void 0 : error.message
-        });
-    }
-});
-exports.compareProductByName = compareProductByName;

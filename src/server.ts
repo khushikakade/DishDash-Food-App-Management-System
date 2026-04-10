@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 import app from './app';
-import { connectMySQL, sequelize } from './config/db';
+import { connectDatabase, sequelize } from './config/db';
 
 // Import all models
 import Product from './models/product.model';
@@ -17,7 +17,7 @@ import Notification from './models/notification.model';
 const start = async () => {
   try {
     // 1. Connect to Database
-    await connectMySQL();
+    await connectDatabase();
     
     // 2. Setup Associations
     console.log('⚙️  Setting up model associations...');

@@ -29,7 +29,7 @@ const notification_model_1 = __importDefault(require("./models/notification.mode
 const start = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // 1. Connect to Database
-        yield (0, db_1.connectMySQL)();
+        yield (0, db_1.connectDatabase)();
         // 2. Setup Associations
         console.log('⚙️  Setting up model associations...');
         // PlatformListing associations (already defined in model)

@@ -36,13 +36,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const priceComparisonController = __importStar(require("../controllers/priceComparison.controller"));
 const router = (0, express_1.Router)();
-router.route('/')
+router.post('/compare', priceComparisonController.compareProductPrices);
+router
+    .route('/')
     .post(priceComparisonController.createPriceComparison)
     .get(priceComparisonController.getPriceComparisons);
-router.route('/:id')
+router
+    .route('/:id')
     .get(priceComparisonController.getPriceComparisonById)
     .put(priceComparisonController.updatePriceComparison)
     .delete(priceComparisonController.deletePriceComparison);
-router.route('/compare')
-    .post(priceComparisonController.compareProductPrices);
 exports.default = router;

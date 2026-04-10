@@ -12,30 +12,46 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.connectMySQL = exports.sequelize = void 0;
+exports.connectDatabase = exports.sequelize = void 0;
 const sequelize_1 = require("sequelize");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config({ override: true });
-exports.sequelize = new sequelize_1.Sequelize(process.env.MYSQL_DATABASE || 'food_delivery', process.env.MYSQL_USER || 'root', process.env.MYSQL_PASSWORD || 'root', {
-    host: process.env.MYSQL_HOST || 'localhost',
-    port: Number(process.env.MYSQL_PORT || 3306),
-    dialect: 'mysql',
-    logging: false,
-});
-const connectMySQL = () => __awaiter(void 0, void 0, void 0, function* () {
+const dialect = (process.env.DB_DIALECT || 'mysql');
+const createSequelizeInstance = () => {
+    if (process.env.DATABASE_URL) {
+        return new sequelize_1.Sequelize(process.env.DATABASE_URL, {
+            dialect,
+            logging: false,
+        });
+    }
+    return new sequelize_1.Sequelize(process.env.MYSQL_DATABASE || 'food_delivery', process.env.MYSQL_USER || 'root', process.env.MYSQL_PASSWORD || 'root', {
+        host: process.env.MYSQL_HOST || 'localhost',
+        port: Number(process.env.MYSQL_PORT || 3306),
+        dialect,
+        logging: false,
+    });
+};
+exports.sequelize = createSequelizeInstance();
+const connectDatabase = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const host = process.env.MYSQL_HOST || 'localhost';
-        const database = process.env.MYSQL_DATABASE || 'food_delivery';
-        const user = process.env.MYSQL_USER || 'root';
-        console.log(`Attempting to connect to MySQL at ${host}:${process.env.MYSQL_PORT || '3306'}...`);
-        console.log(`Database: ${database}`);
-        console.log(`User: ${user}`);
+        if (process.env.DATABASE_URL) {
+            console.log(`Attempting to connect using ${dialect.toUpperCase()} DATABASE_URL...`);
+        }
+        else {
+            const host = process.env.MYSQL_HOST || 'localhost';
+            const port = process.env.MYSQL_PORT || '3306';
+            const database = process.env.MYSQL_DATABASE || 'food_delivery';
+            const user = process.env.MYSQL_USER || 'root';
+            console.log(`Attempting to connect to ${dialect.toUpperCase()} at ${host}:${port}...`);
+            console.log(`Database: ${database}`);
+            console.log(`User: ${user}`);
+        }
         yield exports.sequelize.authenticate();
-        console.log('MySQL connected successfully');
+        console.log(`${dialect.toUpperCase()} connected successfully`);
     }
     catch (error) {
         console.error('Database connection failed:', error);
         process.exit(1);
     }
 });
-exports.connectMySQL = connectMySQL;
+exports.connectDatabase = connectDatabase;

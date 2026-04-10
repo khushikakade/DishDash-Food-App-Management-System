@@ -15,39 +15,36 @@ const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const favorite_routes_1 = __importDefault(require("./routes/favorite.routes"));
 const rating_routes_1 = __importDefault(require("./routes/rating.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const priceComparison_routes_1 = __importDefault(require("./routes/priceComparison.routes"));
+const redirection_routes_1 = __importDefault(require("./routes/redirection.routes"));
 const app = (0, express_1.default)();
-// ✅ CORS Configuration - Allow frontend to communicate with backend
 const corsOptions = {
     origin: [
-        'http://localhost:3000', // Next.js frontend default
-        'http://localhost:3001', // Alternative frontend port
-        'http://127.0.0.1:3000', // Localhost variant
-        'http://127.0.0.1:3001', // Localhost variant
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:3001',
     ],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
 };
 app.use((0, cors_1.default)(corsOptions));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
-// ✅ Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
 });
-// ✅ Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
     res.json({ status: 'ok', message: 'Backend is running' });
 });
-// ✅ Root endpoint for quick browser check
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
     res.json({
         message: 'DishDash backend is running',
         health: '/health',
         apiBase: '/api',
     });
 });
-// ✅ Routes
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api/users', user_routes_1.default);
 app.use('/api/products', product_routes_1.default);
@@ -57,10 +54,10 @@ app.use('/api/restaurants', restaurant_routes_1.default);
 app.use('/api/favorites', favorite_routes_1.default);
 app.use('/api/ratings', rating_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
-// ✅ 404 handler
-app.use((req, res) => {
+app.use('/api/price-comparisons', priceComparison_routes_1.default);
+app.use('/api/redirections', redirection_routes_1.default);
+app.use((_req, res) => {
     res.status(404).json({ message: 'Route not found' });
 });
-// ✅ Error handling middleware
 app.use(error_middleware_1.default);
 exports.default = app;

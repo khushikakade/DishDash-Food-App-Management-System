@@ -13,22 +13,33 @@ class PriceComparison extends Model {
   public readonly updatedAt!: Date;
 }
 
-PriceComparison.init({
-  id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
-    primaryKey: true,
+PriceComparison.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    compare_price: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    userId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    platformId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
   },
-  compare_price: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-  },
-}, {
-  sequelize,
-  tableName: 'price_comparisons',
-});
+  {
+    sequelize,
+    tableName: 'price_comparisons',
+    timestamps: true,
+  }
+);
 
-// Associations
 PriceComparison.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(PriceComparison, { foreignKey: 'userId' });
 

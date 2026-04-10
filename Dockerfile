@@ -16,8 +16,8 @@ COPY . .
 # Build TypeScript code
 RUN npm run build
 
-# Make port 3000 available to the world outside this container
-EXPOSE 3000
+# Make backend port available to the world outside this container
+EXPOSE 5000
 
 # Run the app when the container launches
 CMD [ "npm", "start" ]

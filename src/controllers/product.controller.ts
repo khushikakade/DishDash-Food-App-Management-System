@@ -4,10 +4,89 @@ import Product from '../models/product.model';
 import Platform from '../models/platform.model';
 import PlatformListing from '../models/platformListing.model';
 import { Restaurant } from '../models/restaurant.model';
+import { IntegrationService } from '../services/integration.service';
 
-/* =========================
-   CREATE PRODUCT
-========================= */
+const integrationService = new IntegrationService();
+
+type IntegrationComparison = {
+  platform: string;
+  basePrice: number;
+  deliveryFee: number;
+  discount: number;
+  finalPrice: number;
+  etaMinutes: number;
+  redirectUrl: string;
+  source: 'integration-service';
+  productName: string;
+  productImage: string | null;
+  restaurantName: string;
+  restaurantCuisine: string;
+};
+
+const normalizeIntegrationResults = (
+  productName: string,
+  integrationResponse: any
+) => {
+  const comparisons: IntegrationComparison[] = (integrationResponse?.results || [])
+    .map((result: any) => {
+      const numericPrice =
+        typeof result.price === 'string'
+          ? Number.parseFloat(result.price.replace(/[^\d.]/g, ''))
+          : Number(result.price);
+
+      if (!Number.isFinite(numericPrice)) {
+        return null;
+      }
+
+      return {
+        platform: result.platform || 'Unknown Platform',
+        basePrice: numericPrice,
+        deliveryFee: 0,
+        discount: 0,
+        finalPrice: numericPrice,
+        etaMinutes: Number(result.etaMinutes) || 0,
+        redirectUrl: result.redirectUrl || '#',
+        source: 'integration-service',
+        productName,
+        productImage: null,
+        restaurantName: 'Unknown restaurant',
+        restaurantCuisine: 'Unknown',
+      };
+    })
+    .filter(
+      (comparison: IntegrationComparison | null): comparison is IntegrationComparison =>
+        comparison !== null
+    );
+
+  const cheapest =
+    comparisons.length > 0
+      ? comparisons.reduce((min, current) =>
+          current.finalPrice < min.finalPrice ? current : min
+        )
+      : null;
+
+  const fastestDelivery =
+    comparisons.length > 0
+      ? comparisons.reduce((fastest, current) =>
+          current.etaMinutes < fastest.etaMinutes ? current : fastest
+        )
+      : null;
+
+  return {
+    product: integrationResponse?.product || productName,
+    restaurant: {
+      id: null,
+      name: 'Unknown restaurant',
+      cuisine: 'Unknown',
+      address: 'Unknown',
+    },
+    comparisons,
+    cheapest,
+    fastestDelivery,
+    source: 'integration-service' as const,
+  };
+};
+
 export const createProduct = async (req: Request, res: Response) => {
   try {
     const { name, category, restaurantId, imageUrl } = req.body;
@@ -26,9 +105,6 @@ export const createProduct = async (req: Request, res: Response) => {
   }
 };
 
-/* =========================
-   GET ALL PRODUCTS
-========================= */
 export const getProducts = async (_req: Request, res: Response) => {
   try {
     const products = await Product.findAll();
@@ -38,9 +114,6 @@ export const getProducts = async (_req: Request, res: Response) => {
   }
 };
 
-/* =========================
-   GET PRODUCT BY ID
-========================= */
 export const getProductById = async (req: Request, res: Response) => {
   try {
     const product = await Product.findByPk(req.params.id);
@@ -49,15 +122,12 @@ export const getProductById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Product not found' });
     }
 
-    res.json(product);
+    return res.json(product);
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching product' });
+    return res.status(500).json({ message: 'Error fetching product' });
   }
 };
 
-/* =========================
-   ADD PLATFORM LISTING
-========================= */
 export const addPlatformListing = async (req: Request, res: Response) => {
   try {
     const {
@@ -82,25 +152,21 @@ export const addPlatformListing = async (req: Request, res: Response) => {
       redirectUrl,
     });
 
-    res.status(201).json(listing);
+    return res.status(201).json(listing);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Error adding listing' });
+    return res.status(500).json({ message: 'Error adding listing' });
   }
 };
 
-/* =========================
-   SEARCH + COMPARE (Enhanced with Restaurant info)
-========================= */
 export const compareSearch = async (req: Request, res: Response) => {
   try {
-    const { product } = req.query;
+    const product = `${req.query.product || ''}`.trim();
 
     if (!product) {
       return res.status(400).json({ message: 'Product query required' });
     }
 
-    // ✅ Correct column name is "name"
     const foundProduct = await Product.findOne({
       where: {
         name: {
@@ -116,7 +182,14 @@ export const compareSearch = async (req: Request, res: Response) => {
     });
 
     if (!foundProduct) {
-      return res.status(404).json({ message: 'Product not found' });
+      const integrationResponse = await integrationService.comparePrices(product);
+      const normalizedResponse = normalizeIntegrationResults(product, integrationResponse);
+
+      if (!normalizedResponse.comparisons.length) {
+        return res.status(404).json({ message: 'Product not found' });
+      }
+
+      return res.json(normalizedResponse);
     }
 
     const listings = await PlatformListing.findAll({
@@ -125,7 +198,14 @@ export const compareSearch = async (req: Request, res: Response) => {
     });
 
     if (!listings.length) {
-      return res.status(404).json({ message: 'No listings found' });
+      const integrationResponse = await integrationService.comparePrices(foundProduct.name);
+      const normalizedResponse = normalizeIntegrationResults(foundProduct.name, integrationResponse);
+
+      if (!normalizedResponse.comparisons.length) {
+        return res.status(404).json({ message: 'No listings found' });
+      }
+
+      return res.json(normalizedResponse);
     }
 
     const comparisons = listings.map((listing: any) => {
@@ -158,6 +238,7 @@ export const compareSearch = async (req: Request, res: Response) => {
         redirectUrl: listing.redirectUrl,
         discountType: listing.discountType,
         rating: listing.rating || 0,
+        source: 'database' as const,
       };
     });
 
@@ -169,7 +250,7 @@ export const compareSearch = async (req: Request, res: Response) => {
       curr.etaMinutes < fastest.etaMinutes ? curr : fastest
     );
 
-    res.json({
+    return res.json({
       product: foundProduct.name,
       restaurant: {
         id: (foundProduct as any).restaurantId,
@@ -180,6 +261,7 @@ export const compareSearch = async (req: Request, res: Response) => {
       comparisons,
       cheapest,
       fastestDelivery,
+      source: 'database',
     });
   } catch (error) {
     console.error('Comparison error:', error);
@@ -187,17 +269,13 @@ export const compareSearch = async (req: Request, res: Response) => {
       message: (error as any)?.message,
       stack: (error as any)?.stack,
     });
-    res.status(500).json({ 
+    return res.status(500).json({
       message: 'Error comparing prices',
-      error: (error as any)?.message 
+      error: (error as any)?.message,
     });
   }
 };
 
-/* =========================
-   COMPARE BY RESTAURANT
-   Returns prices organized by restaurant
-========================= */
 export const compareByRestaurant = async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
@@ -211,7 +289,6 @@ export const compareByRestaurant = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'Restaurant not found' });
     }
 
-    // Get all products from this restaurant
     const products = await Product.findAll({
       where: { restaurantId },
     });
@@ -264,10 +341,9 @@ export const compareByRestaurant = async (req: Request, res: Response) => {
       }
     }
 
-    // Sort by final price for easier comparison
     const sortedByPrice = [...allComparisons].sort((a, b) => a.finalPrice - b.finalPrice);
 
-    res.json({
+    return res.json({
       restaurant: {
         id: restaurant.id,
         name: restaurant.name,
@@ -280,92 +356,9 @@ export const compareByRestaurant = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Restaurant comparison error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       message: 'Error comparing restaurant prices',
       error: (error as any)?.message,
-    });
-  }
-};
-
-/* =========================
-   COMPARE PRODUCT BY NAME (SEARCH)
-========================= */
-export const compareProductByName = async (req: Request, res: Response) => {
-  try {
-    const { product } = req.query;
-
-    if (!product || typeof product !== 'string') {
-      return res.status(400).json({ message: 'Product name is required' });
-    }
-
-    // ✅ Correct column name is "name"
-    const foundProduct = await Product.findOne({
-      where: {
-        name: {
-          [Op.like]: `%${product}%`,
-        },
-      },
-    });
-
-    if (!foundProduct) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-
-    const listings = await PlatformListing.findAll({
-      where: { productId: foundProduct.id },
-      include: [{ model: Platform }],
-    });
-
-    if (!listings.length) {
-      return res.status(404).json({ message: 'No listings found' });
-    }
-
-    const comparisons = listings.map((listing: any) => {
-      const basePrice = parseFloat(listing.price);
-      const deliveryFee = parseFloat(listing.deliveryFee || 0);
-      const discountValue = parseFloat(listing.discountValue || 0);
-
-      let discount = 0;
-
-      if (listing.discountType === 'percentage') {
-        discount = (basePrice * discountValue) / 100;
-      } else if (listing.discountType === 'flat') {
-        discount = discountValue;
-      }
-
-      const finalPrice = basePrice + deliveryFee - discount;
-
-      return {
-        productName: foundProduct.name,
-        productImage: foundProduct.imageUrl,
-        platform: listing.Platform.name,
-        basePrice,
-        deliveryFee,
-        discount,
-        finalPrice,
-        etaMinutes: listing.etaMinutes,
-        redirectUrl: listing.redirectUrl,
-      };
-    });
-
-    const cheapest = comparisons.reduce((min: any, curr: any) =>
-      curr.finalPrice < min.finalPrice ? curr : min
-    );
-
-    res.json({
-      product: foundProduct.name,
-      comparisons,
-      cheapest,
-    });
-  } catch (error) {
-    console.error('Comparison error:', error);
-    console.error('Error details:', {
-      message: (error as any)?.message,
-      stack: (error as any)?.stack,
-    });
-    res.status(500).json({ 
-      message: 'Error comparing prices',
-      error: (error as any)?.message 
     });
   }
 };

@@ -10,38 +10,36 @@ import authRoutes from './routes/auth.routes';
 import favoriteRoutes from './routes/favorite.routes';
 import ratingRoutes from './routes/rating.routes';
 import notificationRoutes from './routes/notification.routes';
+import priceComparisonRoutes from './routes/priceComparison.routes';
+import redirectionRoutes from './routes/redirection.routes';
 
 const app = express();
 
-// ✅ CORS Configuration - Allow frontend to communicate with backend
 const corsOptions = {
   origin: [
-    'http://localhost:3000',      // Next.js frontend default
-    'http://localhost:3001',      // Alternative frontend port
-    'http://127.0.0.1:3000',      // Localhost variant
-    'http://127.0.0.1:3001',      // Localhost variant
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
   ],
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// ✅ Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok', message: 'Backend is running' });
 });
 
-// ✅ Root endpoint for quick browser check
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     message: 'DishDash backend is running',
     health: '/health',
@@ -49,7 +47,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
@@ -59,13 +56,13 @@ app.use('/api/restaurants', restaurantRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/price-comparisons', priceComparisonRoutes);
+app.use('/api/redirections', redirectionRoutes);
 
-// ✅ 404 handler
-app.use((req, res) => {
+app.use((_req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// ✅ Error handling middleware
 app.use(errorHandler);
 
 export default app;

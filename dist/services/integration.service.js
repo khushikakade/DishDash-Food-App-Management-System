@@ -16,7 +16,10 @@ exports.IntegrationService = void 0;
 const axios_1 = __importDefault(require("axios"));
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
-const FASTAPI_BASE_URL = process.env.FASTAPI_BASE_URL || 'http://localhost:8000';
+const rawFastApiBaseUrl = process.env.FASTAPI_BASE_URL || 'http://localhost:8001';
+const FASTAPI_BASE_URL = rawFastApiBaseUrl.startsWith('http')
+    ? rawFastApiBaseUrl
+    : `http://${rawFastApiBaseUrl}`;
 class IntegrationService {
     comparePrices(productName) {
         return __awaiter(this, void 0, void 0, function* () {
